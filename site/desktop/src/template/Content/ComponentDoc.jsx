@@ -1,10 +1,12 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 import PropTypes from 'prop-types';
 import DocumentTitle from 'react-document-title';
 import { FormattedMessage } from 'react-intl';
 import Icon from 'antd/lib/icon';
 import Popover from 'antd/lib/popover';
 import QRCode from 'qrcode.react';
+import classnames from 'classnames';
 import { getChildren } from 'jsonml.js/lib/utils';
 import throttleByAnimationFrame from 'antd/lib/_util/throttleByAnimationFrame';
 import Demo from './Demo';
@@ -18,10 +20,15 @@ export default class ComponentDoc extends React.Component {
   constructor(props) {
     super(props);
 
+    const demos =
+      Object.keys(props.demos)
+        .map(key => props.demos[key])
+        .filter(demoData => !demoData.meta.hidden);
+
     this.state = {
       currentIndex: this.getIndex(props),
       toggle: false,
-      needMobileFix: false,
+      inMultiDemoMode: demos.length >= 2,
     };
     this.handleScroll = this.getScrollHandle();
   }
@@ -59,8 +66,10 @@ export default class ComponentDoc extends React.Component {
 
 
   componentDidMount() {
-    document.addEventListener('scroll', this.handleScroll, false);
-    setTimeout(this.handleScroll, 0);
+    if (this.state.inMultiDemoMode) {
+      document.addEventListener('scroll', this.handleScroll, false);
+      setTimeout(this.handleScroll, 0);
+    }
   }
   componentWillUnmount() {
     document.removeEventListener('scroll', this.handleScroll, false);
@@ -69,15 +78,13 @@ export default class ComponentDoc extends React.Component {
   getScrollHandle = () => throttleByAnimationFrame(() => {
     const apiTop = document.getElementById('api').getBoundingClientRect().top;
     const demoTop = document.getElementById('demo-code').getBoundingClientRect().top;
-
-    let needMobileFix = false;
+    console.log('scroll', demoTop, apiTop, this.mobile);
     if (demoTop <= 0 && apiTop >= 600) {
-      needMobileFix = true;
-    }
-    if (needMobileFix !== this.state.needMobileFix) {
-      this.setState({
-        needMobileFix,
-      });
+      this.mobile.style = {
+        position: 'fixed',
+        top: 0,
+        right: '9.5%',
+      };
     }
   });
 
@@ -127,27 +134,10 @@ export default class ComponentDoc extends React.Component {
     const search = this.context.intl.locale === 'zh-CN' ? '?lang=zh-CN' : '?lang=en-US';
     const iframeUrl = `${protocol}//${host}/${mainPath}/${path}${search}${hash}`;
 
-    const { needMobileFix } = this.state;
-    let posStyle = {};
-    if (needMobileFix) {
-      posStyle = {
-        position: 'fixed',
-        top: 0,
-        right: '9.5%',
-      };
-    } else {
-      posStyle = {
-        float: 'right',
-        marginRight: '-405Px',
-      };
-    }
-    const mobileWrapperStyle = {
-      position: 'relative',
-      width: 405,
-      minHeight: 300,
-      padding: '0 0 0 30Px',
-      ...posStyle,
-    };
+    const codeContainerCls = classnames('clearfix demo-code-container', {
+      'demo-code-container-mutli': this.state.inMultiDemoMode,
+    });
+
     return (
       <DocumentTitle title={`${subtitle || chinese || ''} ${title || english} - Ant Design`}>
         <article>
@@ -171,11 +161,11 @@ export default class ComponentDoc extends React.Component {
             </section>
           </section>
 
-          <div id="demo-code" className="clearfix" style={{ paddingRight: 405, paddingBottom: 350 }}>
+          <div id="demo-code" className={codeContainerCls} ref={mobile => this.mobile = ReactDOM.findDOMNode(mobile)}>
             <div style={{ width: '100%', float: 'left' }}>
               {leftChildren}
             </div>
-            <div style={mobileWrapperStyle}>
+            <div className="mobile-wrapper">
               <div id="aside-demo" className="aside-demo">
                 <div style={{ width: '377Px', height: '620Px' }}>
                   <div className="demo-preview-wrapper">
