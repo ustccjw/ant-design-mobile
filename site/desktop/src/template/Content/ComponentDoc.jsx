@@ -1,7 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import DocumentTitle from 'react-document-title';
-import classNames from 'classnames';
 import { FormattedMessage } from 'react-intl';
 import Icon from 'antd/lib/icon';
 import Popover from 'antd/lib/popover';
@@ -20,13 +19,9 @@ export default class ComponentDoc extends React.Component {
     super(props);
 
     this.state = {
-      expandAll: false,
       currentIndex: this.getIndex(props),
-      // 收起展开代码的存储数组
-      codeExpandList: [],
       toggle: false,
-      position: 'relative',
-      top: 0,
+      needMobileFix: false,
     };
     this.handleScroll = this.getScrollHandle();
   }
@@ -48,13 +43,11 @@ export default class ComponentDoc extends React.Component {
     return linkIndex;
   }
 
-  componentWillReceiveProps = (nextProps) => {
+  componentWillReceiveProps = () => {
     this.setState({
       currentIndex: 0,
-      codeExpandList: [],
       toggle: false,
     });
-    this.initExpandAll(nextProps);
   }
 
   togglePreview = (e) => {
@@ -64,43 +57,8 @@ export default class ComponentDoc extends React.Component {
     });
   }
 
-  // 用于控制内部代码的展开和收起
-  handleCodeExpandList = (index, type) => {
-    const codeExpandList = { ...this.state.codeExpandList };
-    codeExpandList[index] = type;
-
-    this.setState({ codeExpandList });
-  }
-
-  handleExpandToggle = () => {
-    const codeExpandList = {};
-    // const { meta } = this.props.doc;
-    const props = this.props;
-    const demos = Object.keys(props.demos)
-      .map(key => props.demos[key])
-      .filter(demoData => !demoData.meta.hidden);
-
-    this.setState({
-      expandAll: !this.state.expandAll,
-      codeExpandList: demos.map((item, index) => codeExpandList[index] = !this.state.expandAll),
-    });
-  }
-
-  initExpandAll = (nextProps) => {
-    const codeExpandList = {};
-    const props = nextProps || this.props;
-    const demos = Object.keys(props.demos)
-      .map(key => props.demos[key])
-      .filter(demoData => !demoData.meta.hidden);
-
-    this.setState({
-      expandAll: true,
-      codeExpandList: demos.map((item, index) => codeExpandList[index] = true),
-    });
-  }
 
   componentDidMount() {
-    this.initExpandAll();
     document.addEventListener('scroll', this.handleScroll, false);
     setTimeout(this.handleScroll, 0);
   }
@@ -109,28 +67,16 @@ export default class ComponentDoc extends React.Component {
   }
 
   getScrollHandle = () => throttleByAnimationFrame(() => {
-    let position = 'relative';
-    let top = 0;
-
     const apiTop = document.getElementById('api').getBoundingClientRect().top;
     const demoTop = document.getElementById('demo-code').getBoundingClientRect().top;
 
-    if (demoTop <= 0) {
-      if (apiTop >= 600) {
-        // 固定在屏幕顶部
-        position = 'fixed';
-        top = 0;
-      } else if (apiTop >= 0) {
-        // 逐渐离开屏幕
-        position = 'fixed';
-        top = apiTop - 600;
-      }
+    let needMobileFix = false;
+    if (demoTop <= 0 && apiTop >= 600) {
+      needMobileFix = true;
     }
-
-    if ((typeof top === 'number' && top !== this.state.top) || position !== this.state.position) {
+    if (needMobileFix !== this.state.needMobileFix) {
       this.setState({
-        position,
-        top,
+        needMobileFix,
       });
     }
   });
@@ -143,7 +89,6 @@ export default class ComponentDoc extends React.Component {
     const demos = Object.keys(props.demos)
       .map(key => props.demos[key])
       .filter(demoData => !demoData.meta.hidden);
-    const expand = this.state.expandAll;
 
     const leftChildren = [];
 
@@ -155,22 +100,15 @@ export default class ComponentDoc extends React.Component {
           <Demo
             togglePreview={this.togglePreview}
             {...demoData}
-            handleCodeExpandList={this.handleCodeExpandList}
-            codeExpand={this.state.codeExpandList[index]}
             className={currentIndex === index ? 'code-box-target' : ''}
             key={index}
             index={index}
             currentIndex={currentIndex}
             utils={props.utils}
-            expand={expand}
             pathname={location.pathname}
           />,
         );
       });
-    const expandTriggerClass = classNames({
-      'code-box-expand-trigger': true,
-      'code-box-expand-trigger-active': expand,
-    });
 
     const protocol = window.location.protocol;
     const path = doc.meta.filename.split('/')[1];
@@ -189,22 +127,22 @@ export default class ComponentDoc extends React.Component {
     const search = this.context.intl.locale === 'zh-CN' ? '?lang=zh-CN' : '?lang=en-US';
     const iframeUrl = `${protocol}//${host}/${mainPath}/${path}${search}${hash}`;
 
-    const { position, top } = this.state;
+    const { needMobileFix } = this.state;
     let posStyle = {};
-    if (position === 'relative') {
+    if (needMobileFix) {
       posStyle = {
-        position,
-        float: 'right',
-        marginRight: '-405Px',
+        position: 'fixed',
+        top: 0,
+        right: '9.5%',
       };
     } else {
       posStyle = {
-        position,
-        top,
-        right: '9.5%',
+        float: 'right',
+        marginRight: '-405Px',
       };
     }
     const mobileWrapperStyle = {
+      position: 'relative',
       width: 405,
       minHeight: 300,
       padding: '0 0 0 30Px',
@@ -229,17 +167,11 @@ export default class ComponentDoc extends React.Component {
             <section id="demoTitle" className="demo-title-wrapper">
               <h2 id="demoTitle" className="demo-title">
                 <FormattedMessage id="app.ComponentDoc.codeTitle" />
-                <Icon
-                  type="appstore"
-                  className={expandTriggerClass}
-                  title={<FormattedMessage id="app.ComponentDoc.codeExpand" />}
-                  onClick={this.handleExpandToggle}
-                />
               </h2>
             </section>
           </section>
 
-          <div id="demo-code" className="clearfix" style={{ paddingRight: 405 }}>
+          <div id="demo-code" className="clearfix" style={{ paddingRight: 405, paddingBottom: 350 }}>
             <div style={{ width: '100%', float: 'left' }}>
               {leftChildren}
             </div>
